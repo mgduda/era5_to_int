@@ -74,6 +74,34 @@ class RH2mDiags:
             self.td = None
 
 
+class GeopotentialHeightDiags:
+    """ Implements the computation of SOILHGT and GHT (geopotential height at
+    the surface and at upper-air levels, respectively) from ERA5 Z
+    (geopotential).
+    """
+
+    def consider(self, field, xlvl, proj, hdate, slab, intfile):
+        """ Considers whether the given field represents geopotential, and if
+        so, computes geopotential height, writing the result to the output
+        intermediate file.
+        """
+
+        if field == 'GEOPT':
+            print('Computing GHT at ', xlvl)
+
+            write_slab(intfile, slab / 9.81, xlvl, proj, 'GHT', hdate, 'm',
+                'ERA5 reanalysis grid', 'Geopotential height')
+
+        elif field == 'SOILGEO':
+            print('Computing SOILHGT')
+
+            write_slab(intfile, slab / 9.81, 200100.0, proj, 'SOILHGT', hdate, 'm',
+                'ERA5 reanalysis grid', 'Geopotential height')
+
+        else:
+            return
+
+
 def days_in_month(year, month):
     """ Returns the number of days in a month, depending on the year.
     A Gregorian calendar is assumed for the purposes of determining leap
@@ -364,6 +392,7 @@ if __name__ == '__main__':
     diagnostics = []
     diagnostics.append(SnowDiags())
     diagnostics.append(RH2mDiags())
+    diagnostics.append(GeopotentialHeightDiags())
 
     int_vars = []
     if args.isobaric:
@@ -437,6 +466,7 @@ if __name__ == '__main__':
                         xlvl = 1.0
                     elif v.WPSname == 'PMSL':
                         xlvl = 201300.0
+
                     write_slab(intfile, slab, xlvl, proj, v.WPSname, hdate, units,
                         map_source, desc)
 
@@ -445,12 +475,16 @@ if __name__ == '__main__':
                 else:
                     for k in range(f.dimensions['level'].size):
                         slab = field_arr[k,:,:]
-                        write_slab(intfile, slab, float(f.variables['level'][k]), proj,
+                        if args.isobaric:
+                            xlvl = f.variables['level'][k] * 100.0    # Convert hPa to Pa
+                        else:
+                            xlvl = float(f.variables['level'][k])     # Level index
+
+                        write_slab(intfile, slab, xlvl, proj,
                             v.WPSname, hdate, units, map_source, desc)
 
                         for diag in diagnostics:
-                            diag.consider(v.WPSname, float(f.variables['level'][k]),
-                                proj, hdate, slab, intfile)
+                            diag.consider(v.WPSname, xlvl, proj, hdate, slab,intfile)
 
         intfile.close()
 
